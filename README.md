@@ -493,8 +493,8 @@ Contributions are welcome! Please follow these steps:
 | **Web Framework** | FastAPI | Latest |
 | **ASGI Server** | Uvicorn | Latest |
 | **UI Framework** | Streamlit | Latest |
-| **Vector Database** | Qdrant | Latest |
-| **Chat Database** | MongoDB | Latest |
+| **Vector Database** | Qdrant/FAISS | Latest |
+| **Chat Database** | MongoDB/InMemory | Latest |
 | **Document Processing** | LangChain Community | ~0.3.27 |
 | **LLM Provider** | OpenAI | ~0.3.28 |
 | **Web Search** | Tavily | Latest |
