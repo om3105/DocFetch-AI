@@ -1,0 +1,144 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+/* ─── Exact DocFetch AI Theme Variables ─── */
+:root,
+html[data-theme='dark'],
+html.dark {
+  /* DocFetch Dark Mode */
+  --bg: #181818;                  /* Main dark canvas */
+  --sidebar-bg: #1F1F1F;          /* Left sidebar background */
+  --surface: #262626;             /* Input container & surface */
+  --surface-hover: #2E2E2E;       /* Surface hover state */
+  --border: rgba(255, 255, 255, 0.08); /* 1px border */
+  --border-subtle: rgba(255, 255, 255, 0.04);
+
+  --text-primary: #FFFFFF;        /* Pure white main text */
+  --text-secondary: #A1A1AA;      /* Muted gray text */
+  --text-muted: #71717A;          /* Dim tracking text */
+
+  --accent: #FFFFFF;
+  --accent-btn: #3F3F46;
+  --accent-btn-hover: #52525B;
+
+  --success: #10B981;
+  --alert: #EF4444;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --accent-light: rgba(255, 255, 255, 0.12);
+
+  --user-bubble: #3F3F46;
+  --user-bubble-text: #FFFFFF;
+}
+
+html[data-theme='light'],
+html.light {
+  /* DocFetch Light Mode */
+  --bg: #F4F4F5;                  /* Main light canvas */
+  --sidebar-bg: #FAFAFA;          /* Left sidebar background */
+  --surface: #FFFFFF;             /* Input container & surface */
+  --surface-hover: #F4F4F5;       /* Surface hover state */
+  --border: rgba(0, 0, 0, 0.08);  /* 1px border */
+  --border-subtle: rgba(0, 0, 0, 0.04);
+
+  --text-primary: #18181B;        /* Dark obsidian main text */
+  --text-secondary: #71717A;      /* Muted gray text */
+  --text-muted: #A1A1AA;          /* Dim tracking text */
+
+  --accent: #18181B;
+  --accent-btn: #E4E4E7;
+  --accent-btn-hover: #D4D4D8;
+
+  --success: #10B981;
+  --alert: #EF4444;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --accent-light: rgba(24, 24, 27, 0.08);
+
+  --user-bubble: #E4E4E7;
+  --user-bubble-text: #18181B;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+h1, h2, h3, h4, h5, h6, .brand-title-wrap, .empty-title, .card-heading {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
+}
+
+::selection {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+/* Crisp Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined' !important;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+}
+
+/* Status Pulsing Glow */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(2, 132, 199, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(2, 132, 199, 0);
+  }
+}
+
+.pulse-dot {
+  animation: pulse-glow 2s infinite;
+}
+

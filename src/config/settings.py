@@ -2,22 +2,22 @@
 Configuration settings for the application.
 """
 
-import os
 from pathlib import Path
 
 import yaml
 
 
 class Config:
-    """Load and manage configuration from YAML file."""
+    """Load and manage configuration from YAML file (singleton)."""
 
-    def __init__(self, config_file: str = None):
-        """
-        Initialize configuration from YAML file.
+    _instance = None
+    _config = None
 
-        Args:
-            config_file: Optional path to config file. Defaults to prompts.yaml.
-        """
+    def __new__(cls, config_file: str = None):
+        """Return the cached instance if YAML is already loaded."""
+        if cls._instance is not None:
+            return cls._instance
+        cls._instance = super().__new__(cls)
         base_path = Path(__file__).parent
         config_path = (
             base_path / "prompts.yaml"
@@ -25,7 +25,8 @@ class Config:
             else Path(config_file)
         )
         with open(config_path, "r") as f:
-            self.config = yaml.safe_load(f)
+            cls._config = yaml.safe_load(f)
+        return cls._instance
 
     def prompt(self, key: str) -> str:
         """
@@ -37,4 +38,4 @@ class Config:
         Returns:
             The prompt template string.
         """
-        return self.config["prompts"][key]
+        return self._config["prompts"][key]

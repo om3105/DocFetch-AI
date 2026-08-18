@@ -1,0 +1,12 @@
+{
+  "auth": {
+    "providers": {
+      "anonymous": true,
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "DocFetch AI",
+        "supportEmail": "deo.omchandrakant31@gmail.com"
+      }
+    }
+  }
+}

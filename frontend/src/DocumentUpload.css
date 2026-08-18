@@ -1,0 +1,196 @@
+/* ─── MNC Document Upload Panel ─── */
+.upload-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.section-label .material-symbols-outlined {
+  font-size: 16px;
+  color: var(--accent);
+}
+
+/* Drop zone */
+.drop-zone {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background-color: var(--surface-variant);
+  position: relative;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-active {
+  border-color: var(--accent);
+  background-color: var(--accent-light);
+}
+
+.drop-zone.has-file {
+  border-color: var(--accent);
+  background-color: var(--accent-light);
+}
+
+/* Drop prompt */
+.drop-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.drop-prompt .material-symbols-outlined {
+  font-size: 24px;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+
+.drop-zone:hover .drop-prompt .material-symbols-outlined {
+  color: var(--accent);
+}
+
+.drop-prompt p {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.drop-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* File preview */
+.file-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.file-icon {
+  font-size: 1.1rem;
+}
+
+.file-name {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.file-size {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+/* Description & upload */
+.description-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.description-input {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.description-input:focus {
+  border-color: var(--accent);
+}
+
+.description-input::placeholder {
+  color: var(--text-muted);
+}
+
+.upload-btn {
+  padding: 0.45rem 0.75rem;
+  background-color: var(--text-primary);
+  color: var(--bg);
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.upload-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+/* Spinner */
+.btn-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Status */
+.upload-status {
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.upload-status.success {
+  background-color: var(--accent-light);
+  color: var(--success);
+  border: 1px solid rgba(2, 132, 199, 0.2);
+}
+
+.upload-status.error {
+  background-color: var(--alert-light);
+  color: var(--alert);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
