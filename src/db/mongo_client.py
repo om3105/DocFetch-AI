@@ -16,8 +16,5 @@ DB_NAME = os.getenv("MONGODB_DB_NAME", "adaptive_rag")
 client = AsyncIOMotorClient(
     MONGO_URL,
     tlsCAFile=certifi.where(),
-    serverSelectionTimeoutMS=2000,
-    connectTimeoutMS=2000,
-    socketTimeoutMS=2000,
 )
 db = client[DB_NAME]
