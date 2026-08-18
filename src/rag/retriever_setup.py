@@ -25,7 +25,7 @@ def get_embeddings():
     """Lazy-load embeddings model to minimize boot memory footprint on 512MB instances."""
     global _embeddings
     if _embeddings is None:
-        google_api_key = os.getenv("GOOGLE_API_KEY")
+        google_api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         if google_api_key:
             from langchain_google_genai import GoogleGenerativeAIEmbeddings
             _embeddings = GoogleGenerativeAIEmbeddings(
@@ -61,7 +61,7 @@ def _get_qdrant_client_info():
     collection_name = os.getenv("QDRANT_DOCS_COLLECTION", "guidelines")
     
     # Use a different collection if using Google embeddings to avoid dimension mismatch (768 vs 384)
-    if os.getenv("GOOGLE_API_KEY"):
+    if os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"):
         collection_name = f"{collection_name}_google"
         
     if url and api_key:
