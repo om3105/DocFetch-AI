@@ -27,7 +27,7 @@ export default function ChatPage() {
   // ── UI state ──────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [activeModel, setActiveModel] = useState('groq');
+  const [activeModel, setActiveModel] = useState('gemini');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelSwitching, setModelSwitching] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
