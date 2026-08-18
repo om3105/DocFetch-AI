@@ -178,7 +178,8 @@ async def list_chats(
     await _ensure_indexes()
 
     limit = min(max(1, limit), 100)
-    query = {"user_id": user["uid"]}
+    # Only return chats that have at least one message
+    query = {"user_id": user["uid"], "has_messages": True}
 
     # Cursor-based pagination: fetch items older than cursor
     if cursor:
@@ -334,8 +335,11 @@ async def send_message(
     }
     await messages_col.insert_one(ai_msg_doc)
 
-    # Update conversation timestamp
-    update_fields = {"updated_at": ai_now}
+    # Update conversation timestamp and mark as having messages
+    update_fields = {
+        "updated_at": ai_now,
+        "has_messages": True,
+    }
 
     # Auto-generate title on first message (if still "New Chat")
     generated_title = None
