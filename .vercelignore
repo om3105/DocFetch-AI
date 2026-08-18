@@ -1,14 +1,14 @@
-# Ignore backend and Python dependencies on Vercel
-src/
-venv/
-.venv/
-requirements.txt
-Dockerfile
-DEPLOYMENT.md
-QDRANT_SETUP_GUIDE.md
-CODE_STYLE_GUIDE.md
-DOCUMENTATION_INDEX.md
-DOCUMENT_FLOW_VISUAL.md
-DOCUMENT_UPLOAD_FLOW.md
-QUICK_REFERENCE.md
-README.md
+# Ignore root-level backend only
+/src/
+/venv/
+/.venv/
+/requirements.txt
+/Dockerfile
+/DEPLOYMENT.md
+/QDRANT_SETUP_GUIDE.md
+/CODE_STYLE_GUIDE.md
+/DOCUMENTATION_INDEX.md
+/DOCUMENT_FLOW_VISUAL.md
+/DOCUMENT_UPLOAD_FLOW.md
+/QUICK_REFERENCE.md
+/README.md
