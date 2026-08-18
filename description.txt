@@ -1,1 +1,1 @@
-This tool is designed solely for answering questions related to the content of your uploaded resume. Please use it to inquire specifically about the details and information contained within your document.
+Tool Instruction: This tool is exclusively for retrieving information and answering questions based solely on the uploaded document. Do not use it for general knowledge, external queries, or any topics not explicitly covered in the provided content.

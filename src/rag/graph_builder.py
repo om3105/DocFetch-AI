@@ -2,20 +2,24 @@
 Graph builder module for the adaptive RAG system.
 """
 
+import logging
+
 from langchain_community.tools import TavilySearchResults
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import PromptTemplate
 from langgraph.constants import START, END
 from langgraph.graph.state import StateGraph
 
-from src.rag.reAct_agent import agent_executor
+from src.rag.reAct_agent import get_agent_executor
 from src.rag.retriever_setup import get_retriever
 from src.config.settings import Config
-from src.llms.openai import llm
+from src.llms.openai import get_llm
 from src.models.grade import Grade
 from src.models.route_identifier import RouteIdentifier
 from src.models.state import State
 from src.tools.graph_tools import routing_tool, doc_tool
+
+logger = logging.getLogger(__name__)
 
 config = Config()
 
@@ -32,20 +36,22 @@ def query_classifier(state: State):
         dict: Updated state with route and latest_query.
     """
     question = state["messages"][-1].content
-    retriever = get_retriever()
-    context = retriever.invoke(question)
-    print("docs received from Qdrant")
-    print(context)
+    try:
+        retriever = get_retriever()
+        context = retriever.invoke(question)
+    except Exception as e:
+        logger.warning("Retriever context search failed/timed out: %s", e)
+        context = ""
+    logger.debug("Retrieved context for classification: %s", context)
 
-    llm_with_structured_output = llm.with_structured_output(RouteIdentifier)
+    llm_with_structured_output = get_llm().with_structured_output(RouteIdentifier)
     classify_prompt = PromptTemplate(
         template=config.prompt("classify_prompt"),
-        input_variables=["question", "context"]
+        input_variables=["question", "context"],
     )
     chain = classify_prompt | llm_with_structured_output
     result = chain.invoke({"question": question, "context": context})
-    print("result received is in query classifier")
-    print(result.route)
+    logger.info("Query classified as: %s", result.route)
 
     return {"messages": state["messages"], "route": result.route, "latest_query": question}
 
@@ -60,9 +66,7 @@ def general_llm(state: State):
     Returns:
         dict: Updated messages from LLM.
     """
-    result = llm.invoke(state["messages"])
-    print("inside general llm")
-    print(result)
+    result = get_llm().invoke(state["messages"])
     return {"messages": result}
 
 
@@ -76,27 +80,21 @@ def retriever_node(state: State):
     Returns:
         dict: Updated messages with tool calls.
     """
-    messages = state["latest_query"]
-    result = agent_executor.invoke({"input": messages})
+    agent_executor = get_agent_executor()
+    result = agent_executor.invoke({"input": state["latest_query"]})
 
     # Extract tool calls
-    intermediate_steps = result.get("intermediate_steps", [])
-    tool_calls = []
-    if intermediate_steps:
-        for action, tool_result in intermediate_steps:
-            tool_calls.append({
-                "tool": action.tool,
-                "input": action.tool_input,
-            })
+    tool_calls = [
+        {"tool": action.tool, "input": action.tool_input}
+        for action, _ in result.get("intermediate_steps", [])
+    ]
 
     new_message = AIMessage(
         content=result["output"],
         additional_kwargs={"tool_calls": tool_calls},
     )
 
-    return {
-        "messages": [new_message]
-    }
+    return {"messages": [new_message]}
 
 
 def grade(state: State):
@@ -111,17 +109,16 @@ def grade(state: State):
     """
     grading_prompt = PromptTemplate(
         template=config.prompt("grading_prompt"),
-        input_variables=["question", "context"]
+        input_variables=["question", "context"],
     )
     context = state["messages"][-1].content
     question = state["latest_query"]
 
-    llm_with_grade = llm.with_structured_output(Grade)
-
+    llm_with_grade = get_llm().with_structured_output(Grade)
     chain_graded = grading_prompt | llm_with_grade
     result = chain_graded.invoke({"question": question, "context": context})
 
-    print(result)
+    logger.debug("Grading result: %s", result.binary_score)
     return {"messages": state["messages"], "binary_score": result.binary_score}
 
 
@@ -138,15 +135,13 @@ def rewrite_query(state: State):
     query = state["latest_query"]
     rewrite_prompt = PromptTemplate(
         template=config.prompt("rewrite_prompt"),
-        input_variables=["query"]
+        input_variables=["query"],
     )
-    chain = rewrite_prompt | llm
+    chain = rewrite_prompt | get_llm()
     result = chain.invoke({"query": query})
-    print(result)
 
-    return {
-        "latest_query": result.content
-    }
+    logger.debug("Rewritten query: %s", result.content)
+    return {"latest_query": result.content}
 
 
 def generate(state: State):
@@ -160,16 +155,14 @@ def generate(state: State):
         dict: Generated response.
     """
     context = state["messages"][-1].content
-
     generate_prompt = PromptTemplate(
         template=config.prompt("generate_prompt"),
-        input_variables=["context"]
+        input_variables=["context"],
     )
-
-    generate_chain = generate_prompt | llm
+    generate_chain = generate_prompt | get_llm()
     result = generate_chain.invoke({"context": context})
 
-    return {"messages": [{"role": "assistant", "content": result.content}]}
+    return {"messages": [AIMessage(content=result.content)]}
 
 
 def web_search(state: State):
@@ -182,18 +175,12 @@ def web_search(state: State):
     Returns:
         dict: Search results as messages.
     """
-    # Initialize the Tavily tool
     search_tool = TavilySearchResults()
-
-    # Search a query
     result = search_tool.invoke(state["latest_query"])
 
     contents = [item["content"] for item in result if "content" in item]
-    print(contents)
 
-    return {
-        "messages": [{"role": "assistant", "content": "\n\n".join(contents)}]
-    }
+    return {"messages": [AIMessage(content="\n\n".join(contents))]}
 
 
 # Build the graph
@@ -217,4 +204,3 @@ graph.add_edge("generate", END)
 graph.add_edge("general_llm", END)
 
 builder = graph.compile()
-

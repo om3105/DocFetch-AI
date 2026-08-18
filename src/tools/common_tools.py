@@ -2,7 +2,11 @@
 Common tools for document and description processing.
 """
 
-from src.llms.openai import llm
+import logging
+
+from src.llms.openai import get_llm
+
+logger = logging.getLogger(__name__)
 
 
 def enhance_description_with_llm(user_description: str) -> str:
@@ -19,13 +23,13 @@ def enhance_description_with_llm(user_description: str) -> str:
     Returns:
         Enhanced description formatted as a tool instruction.
     """
-    prompt = f"""
-    Rewrite the following user-provided document description to be used as a retriever tool instruction.
-    It should clearly state that the tool is only for answering questions about the uploaded content.
+    prompt = (
+        "Rewrite the following user-provided document description to be used as a retriever tool instruction. "
+        "It should clearly state that the tool is only for answering questions about the uploaded content.\n\n"
+        f'Description: "{user_description}"\n\n'
+        "Tool Instruction:"
+    )
 
-    Description: "{user_description}"
-
-    Tool Instruction:"""
-
-    response = llm.invoke(prompt)
+    response = get_llm().invoke(prompt)
+    logger.info("Enhanced document description via LLM")
     return response.content.strip()
