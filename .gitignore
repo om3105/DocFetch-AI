@@ -5,8 +5,11 @@ env/
 
 # Environment variables & credentials (NEVER COMMIT)
 .env
+.env.local
+.env.*.local
 *.env
-.env.*
+!.env.example
+!frontend/.env.example
 *.pem
 serviceAccountKey.json
 

@@ -1,9 +1,3 @@
-/**
- * Firebase app initialization.
- *
- * Config values are loaded from Vite environment variables.
- * Set them in frontend/.env (prefixed with VITE_).
- */
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 
@@ -16,7 +10,18 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+let app = null;
+let auth = null;
+
+if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+  } catch (e) {
+    console.warn('Firebase initialization error:', e);
+  }
+}
 
 export { auth };
+
+

@@ -49,16 +49,29 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for redirect result on mount (in case signInWithRedirect was used)
-    getRedirectResult(auth).catch(() => {
-      // Silently ignore — no redirect result
-    });
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
+    // Safety timeout to prevent black screen if network or Firebase takes too long
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 2000);
+
+    // Check for redirect result on mount
+    getRedirectResult(auth).catch(() => {});
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      clearTimeout(timeout);
       setUser(firebaseUser);
       setLoading(false);
     });
-    return unsubscribe;
+
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   async function login() {
