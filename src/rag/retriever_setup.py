@@ -25,16 +25,26 @@ def get_embeddings():
     """Lazy-load embeddings model to minimize boot memory footprint on 512MB instances."""
     global _embeddings
     if _embeddings is None:
-        try:
-            import torch
-            torch.set_num_threads(1)
-        except Exception:
-            pass
-        _embeddings = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True, "batch_size": 16},
-        )
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if google_api_key:
+            from langchain_google_genai import GoogleGenerativeAIEmbeddings
+            _embeddings = GoogleGenerativeAIEmbeddings(
+                model="models/gemini-embedding-2",
+                google_api_key=google_api_key
+            )
+            logger.info("Initialized Google Embeddings (gemini-embedding-2).")
+        else:
+            try:
+                import torch
+                torch.set_num_threads(1)
+            except Exception:
+                pass
+            _embeddings = HuggingFaceEmbeddings(
+                model_name="all-MiniLM-L6-v2",
+                model_kwargs={"device": "cpu"},
+                encode_kwargs={"normalize_embeddings": True, "batch_size": 16},
+            )
+            logger.info("Initialized HuggingFace Embeddings (all-MiniLM-L6-v2).")
     return _embeddings
 
 
@@ -49,6 +59,11 @@ def _get_qdrant_client_info():
     url = os.getenv("QDRANT_URL")
     api_key = os.getenv("QDRANT_API_KEY")
     collection_name = os.getenv("QDRANT_DOCS_COLLECTION", "guidelines")
+    
+    # Use a different collection if using Google embeddings to avoid dimension mismatch (768 vs 384)
+    if os.getenv("GOOGLE_API_KEY"):
+        collection_name = f"{collection_name}_google"
+        
     if url and api_key:
         return url, api_key, collection_name
     return None, None, None
