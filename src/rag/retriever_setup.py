@@ -18,7 +18,25 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DESCRIPTION_PATH = PROJECT_ROOT / "description.txt"
 
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+_embeddings = None
+
+
+def get_embeddings():
+    """Lazy-load embeddings model to minimize boot memory footprint on 512MB instances."""
+    global _embeddings
+    if _embeddings is None:
+        try:
+            import torch
+            torch.set_num_threads(1)
+        except Exception:
+            pass
+        _embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True, "batch_size": 16},
+        )
+    return _embeddings
+
 
 # Module-level caches
 _vectorstore = None
@@ -61,7 +79,7 @@ def retriever_chain(chunks: list[Document]):
             _vectorstore = QdrantVectorStore(
                 client=client,
                 collection_name=collection_name,
-                embedding=embeddings,
+                embedding=get_embeddings(),
             )
             _vectorstore.add_documents(chunks)
             _cached_retriever_tool = None
@@ -74,7 +92,7 @@ def retriever_chain(chunks: list[Document]):
     try:
         _vectorstore = FAISS.from_documents(
             documents=chunks,
-            embedding=embeddings,
+            embedding=get_embeddings(),
         )
         _cached_retriever_tool = None
         logger.info("FAISS vectorstore initialized with %d chunks", len(chunks))
@@ -129,7 +147,7 @@ def get_retriever():
                     _vectorstore = QdrantVectorStore(
                         client=qc,
                         collection_name=collection_name,
-                        embedding=embeddings,
+                        embedding=get_embeddings(),
                     )
                     logger.info("Connected to existing Qdrant Cloud collection: %s", collection_name)
                 else:
@@ -148,7 +166,7 @@ def get_retriever():
             )
             placeholder_vs = FAISS.from_documents(
                 documents=[dummy_doc],
-                embedding=embeddings,
+                embedding=get_embeddings(),
             )
             retriever = placeholder_vs.as_retriever(search_kwargs={"k": 1})
 
