@@ -49,7 +49,7 @@ from langchain_core.runnables import Runnable
 
 # ── Active LLM management ──────────────────────────────────────────────────
 
-_active_model: str = "groq"
+_active_model: str = "gemini"
 
 
 def _parse_schema_from_text(schema, text):
