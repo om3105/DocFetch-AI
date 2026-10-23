@@ -5,69 +5,84 @@ Document upload and processing module.
 import logging
 import os
 import tempfile
-from pathlib import Path
 
-from fastapi import HTTPException, UploadFile, File
-from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from fastapi import HTTPException
+from langchain_community.document_loaders import Docx2txtLoader, PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from src.rag.retriever_setup import retriever_chain, invalidate_description_cache
+from src.rag.retriever_setup import add_user_documents
 from src.tools.common_tools import enhance_description_with_llm
 
 logger = logging.getLogger(__name__)
 
-# Compute project root for deterministic file paths
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DESCRIPTION_PATH = PROJECT_ROOT / "description.txt"
-
 # Pre-built splitter — reused across uploads instead of re-instantiating
 _splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
 
-_SUPPORTED_EXTENSIONS = {".pdf", ".txt"}
+_LOADERS = {
+    ".pdf": PyPDFLoader,
+    ".docx": Docx2txtLoader,
+    ".txt": lambda path: TextLoader(path, encoding="utf-8"),
+    ".md": lambda path: TextLoader(path, encoding="utf-8"),
+}
+
+SUPPORTED_EXTENSIONS = set(_LOADERS)
 
 
-def documents(description: str, filename: str, file_bytes: bytes):
+def process_document(
+    user_id: str,
+    description: str,
+    filename: str,
+    file_bytes: bytes,
+    model_id: str | None = None,
+) -> str:
     """
-    Process and upload a document for RAG.
+    Parse, chunk and index a document for one user.
+
+    Blocking (file parsing, LLM call, embeddings) — call it via asyncio.to_thread.
 
     Args:
+        user_id: Firebase uid of the uploader; the chunks are only searchable by them.
         description: User-provided document description.
         filename: Name of the uploaded file.
         file_bytes: File contents in bytes.
+        model_id: The user's selected LLM, used to enhance the description.
 
     Returns:
-        Boolean indicating success of the upload process.
+        The LLM-enhanced description, for storing alongside the document record.
     """
     ext = os.path.splitext(filename)[1].lower()
 
-    if ext not in _SUPPORTED_EXTENSIONS:
+    if ext not in _LOADERS:
         raise HTTPException(
             status_code=400,
-            detail="Only PDF and TXT files are supported",
+            detail=f"Unsupported file type. Accepted: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
         )
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
         tmp_file.write(file_bytes)
         tmp_path = tmp_file.name
 
-    loader = PyPDFLoader(tmp_path) if ext == ".pdf" else TextLoader(tmp_path, encoding="utf-8")
-
     try:
-        docs = loader.load()
+        docs = _LOADERS[ext](tmp_path).load()
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to process the uploaded file")
+        logger.error("Failed to parse '%s': %s", filename, e)
+        raise HTTPException(status_code=422, detail="Failed to process the uploaded file")
     finally:
         os.unlink(tmp_path)
 
-    # Enhance and persist description
-    description_llm = enhance_description_with_llm(description)
-    with open(DESCRIPTION_PATH, "w", encoding="utf-8") as f:
-        f.write(description_llm)
-
-    # Invalidate cached description so retriever picks up the new one
-    invalidate_description_cache()
-
-    logger.info("Processing '%s': %d pages/sections loaded", filename, len(docs))
+    for doc in docs:
+        doc.metadata["source"] = filename
 
     chunks = _splitter.split_documents(docs)
-    return retriever_chain(chunks)
+    if not chunks:
+        raise HTTPException(status_code=422, detail="No readable text found in the file")
+
+    logger.info("Processing '%s': %d pages/sections, %d chunks", filename, len(docs), len(chunks))
+
+    try:
+        add_user_documents(user_id, chunks)
+    except Exception as e:
+        logger.error("Failed to index '%s': %s", filename, e)
+        raise HTTPException(status_code=502, detail="Failed to store the document — please try again")
+
+    return enhance_description_with_llm(description, model_id)

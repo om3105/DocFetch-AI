@@ -9,7 +9,7 @@ from src.llms.openai import get_llm
 logger = logging.getLogger(__name__)
 
 
-def enhance_description_with_llm(user_description: str) -> str:
+def enhance_description_with_llm(user_description: str, model_id: str | None = None) -> str:
     """
     Enhance user-provided document description using LLM.
 
@@ -19,6 +19,7 @@ def enhance_description_with_llm(user_description: str) -> str:
 
     Args:
         user_description: The original user-provided description.
+        model_id: The user's selected LLM.
 
     Returns:
         Enhanced description formatted as a tool instruction.
@@ -30,6 +31,6 @@ def enhance_description_with_llm(user_description: str) -> str:
         "Tool Instruction:"
     )
 
-    response = get_llm().invoke(prompt)
+    response = get_llm(model_id).invoke(prompt)
     logger.info("Enhanced document description via LLM")
     return response.content.strip()
