@@ -1,5 +1,9 @@
 import { useState, useRef } from 'react';
+import { uploadDocument } from './api';
 import './DocumentUpload.css';
+
+const ACCEPTED_EXTENSIONS = ['.pdf', '.txt', '.md', '.docx'];
+const UNSUPPORTED_MESSAGE = 'Only PDF, TXT, MD and DOCX files are supported.';
 
 export default function DocumentUpload({ onUploadSuccess }) {
   const [file, setFile] = useState(null);
@@ -28,12 +32,13 @@ export default function DocumentUpload({ onUploadSuccess }) {
       setFile(droppedFile);
       setStatus(null);
     } else {
-      setStatus({ type: 'error', message: 'Only PDF and TXT files are supported.' });
+      setStatus({ type: 'error', message: UNSUPPORTED_MESSAGE });
     }
   }
 
   function isValidFile(f) {
-    return f.type === 'application/pdf' || f.type === 'text/plain' || f.name.endsWith('.txt');
+    const name = f.name.toLowerCase();
+    return ACCEPTED_EXTENSIONS.some((ext) => name.endsWith(ext));
   }
 
   function handleFileChange(e) {
@@ -42,7 +47,7 @@ export default function DocumentUpload({ onUploadSuccess }) {
       setFile(selected);
       setStatus(null);
     } else if (selected) {
-      setStatus({ type: 'error', message: 'Only PDF and TXT files are supported.' });
+      setStatus({ type: 'error', message: UNSUPPORTED_MESSAGE });
     }
   }
 
@@ -53,15 +58,14 @@ export default function DocumentUpload({ onUploadSuccess }) {
     setStatus(null);
 
     try {
-      const { uploadDocument } = await import('./api.js');
       await uploadDocument(file, description.trim());
       setStatus({ type: 'success', message: `Uploaded: ${file.name}` });
       onUploadSuccess?.(file.name);
       setFile(null);
       setDescription('');
       if (inputRef.current) inputRef.current.value = '';
-    } catch {
-      setStatus({ type: 'error', message: `Upload failed for ${file.name}` });
+    } catch (err) {
+      setStatus({ type: 'error', message: `Upload failed for ${file.name}: ${err.message}` });
     } finally {
       setUploading(false);
     }
@@ -85,7 +89,7 @@ export default function DocumentUpload({ onUploadSuccess }) {
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.txt"
+          accept={ACCEPTED_EXTENSIONS.join(',')}
           onChange={handleFileChange}
           style={{ display: 'none' }}
         />
@@ -99,7 +103,7 @@ export default function DocumentUpload({ onUploadSuccess }) {
           <div className="drop-prompt">
             <span className="material-symbols-outlined">upload_file</span>
             <p>Drag & Drop Documents</p>
-            <span className="drop-hint">PDF, TXT</span>
+            <span className="drop-hint">PDF, TXT, MD, DOCX</span>
           </div>
         )}
       </div>

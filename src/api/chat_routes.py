@@ -5,18 +5,22 @@ All endpoints enforce account isolation by including user_id in every
 MongoDB query filter. A user can never access another user's conversations.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request
+from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, field_validator
 
 from src.auth import verify_firebase_token
 from src.core.rate_limiter import limiter
 from src.db.mongo_client import db
+from src.db.user_data import get_doc_description, get_user_model
 from src.llms.openai import get_llm
+from src.rag.graph_builder import builder
 
 logger = logging.getLogger(__name__)
 
@@ -67,13 +71,13 @@ class SendMessageRequest(BaseModel):
     @field_validator("query")
     @classmethod
     def validate_query(cls, v: str) -> str:
-        import re
+        # No HTML stripping: the frontend renders markdown without raw HTML,
+        # and stripping mangled legitimate text like "a < b > c".
         v = v.strip()
         if not v:
             raise ValueError("Query cannot be empty")
         if len(v) > 4000:
             raise ValueError("Query exceeds 4000 character limit")
-        v = re.sub(r"<[^>]+>", "", v)
         return v
 
 
@@ -114,17 +118,17 @@ def _serialize_doc(doc: dict) -> dict:
 
 async def _generate_title(user_message: str) -> str:
     """
-    Use the active LLM to auto-generate a concise chat title
-    from the first user message (ChatGPT-style).
+    Auto-generate a concise chat title from the first user message
+    (ChatGPT-style). Uses Groq so titles don't spend the user's Gemini
+    rate-limit budget, which the RAG pipeline needs.
     """
-    import asyncio
     try:
         prompt = (
             f'Generate a concise title (5-8 words max) for a conversation '
             f'that starts with: "{user_message[:200]}". '
             f'Return ONLY the title text, nothing else. No quotes.'
         )
-        result = await asyncio.to_thread(get_llm().invoke, prompt)
+        result = await asyncio.to_thread(get_llm("groq").invoke, prompt)
         title = result.content.strip().strip('"').strip("'")
         return title[:100] if title else "New Chat"
     except Exception as e:
@@ -278,9 +282,6 @@ async def send_message(
     Save the user message, invoke the RAG pipeline, save the AI response.
     Auto-generates a title on the first message (ChatGPT-style).
     """
-    from langchain_core.messages import HumanMessage, AIMessage
-    from src.rag.graph_builder import builder
-
     oid = _validate_object_id(chat_id)
     await _ensure_indexes()
 
@@ -305,11 +306,13 @@ async def send_message(
     }
     await messages_col.insert_one(user_msg_doc)
 
-    # Load conversation history for RAG context
+    # Load the most recent 100 messages (newest first, then restore order)
+    # so long conversations always include the message just sent
     history_docs = await messages_col.find({
         "conversation_id": oid,
         "user_id": uid,
-    }).sort("created_at", 1).to_list(length=100)
+    }).sort("created_at", -1).to_list(length=100)
+    history_docs.reverse()
 
     # Convert to LangChain messages for the RAG pipeline
     lc_messages = []
@@ -319,9 +322,23 @@ async def send_message(
         else:
             lc_messages.append(AIMessage(content=doc["content"]))
 
+    model_id = await get_user_model(uid)
+    doc_description = await get_doc_description(uid)
+
     # Invoke RAG pipeline without blocking event loop
-    import asyncio
-    result = await asyncio.to_thread(builder.invoke, {"messages": lc_messages})
+    try:
+        result = await asyncio.to_thread(builder.invoke, {
+            "messages": lc_messages,
+            "user_id": uid,
+            "model_id": model_id,
+            "doc_description": doc_description,
+            "rewrite_count": 0,
+        })
+    except Exception:
+        logger.exception("RAG pipeline failed for conversation %s", chat_id)
+        # Don't leave an unanswered user message in the history
+        await messages_col.delete_one({"_id": user_msg_doc["_id"]})
+        raise HTTPException(502, "The AI failed to respond — please try again")
     ai_content = result["messages"][-1].content
 
     # Save AI response

@@ -2,34 +2,31 @@ import { auth } from './firebase';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
-function createFallbackJwtToken(uid, email) {
-  try {
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/=/g, '');
-    const payload = btoa(JSON.stringify({ uid: uid || 'usr_anon', user_id: uid || 'usr_anon', email: email || 'user@docfetch.ai' })).replace(/=/g, '');
-    return `${header}.${payload}.signature`;
-  } catch {
-    return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJ1c3JfYW5vbiIsImVtYWlsIjoidXNlckBkb2NmZXRjaC5haSJd.sig';
-  }
-}
-
 /**
  * Get the current user's Firebase ID token.
- * Returns null or fallback JWT if not authenticated.
+ * Throws if no user is signed in — the backend rejects unauthenticated requests.
  */
 async function getAuthToken() {
-  if (auth.currentUser) {
-    try {
-      return await auth.currentUser.getIdToken();
-    } catch {}
+  if (!auth?.currentUser) {
+    throw new Error('Not signed in');
   }
-  return createFallbackJwtToken('usr_demo', 'user@docfetch.ai');
+  return auth.currentUser.getIdToken();
+}
+
+/** Throw an Error carrying the backend's `detail` message when available. */
+async function throwForStatus(response, fallback) {
+  let detail;
+  try {
+    detail = (await response.json()).detail;
+  } catch {}
+  throw new Error(typeof detail === 'string' ? detail : `${fallback}: ${response.status}`);
 }
 
 /** Helper to build headers with auth token. */
 async function authHeaders(extra = {}) {
   const token = await getAuthToken();
   return {
-    ...(token && { Authorization: `Bearer ${token}` }),
+    Authorization: `Bearer ${token}`,
     ...extra,
   };
 }
@@ -44,7 +41,7 @@ export async function createChat(title) {
     headers,
     body: JSON.stringify(title ? { title } : {}),
   });
-  if (!response.ok) throw new Error(`Create chat failed: ${response.status}`);
+  if (!response.ok) await throwForStatus(response, 'Create chat failed');
   return response.json();
 }
 
@@ -55,7 +52,7 @@ export async function fetchChats(cursor) {
   if (cursor) params.set('cursor', cursor);
 
   const response = await fetch(`${API_BASE}/api/chats?${params}`, { headers });
-  if (!response.ok) throw new Error(`Fetch chats failed: ${response.status}`);
+  if (!response.ok) await throwForStatus(response, 'Fetch chats failed');
   return response.json();
 }
 
@@ -66,7 +63,7 @@ export async function fetchChatMessages(chatId, msgCursor) {
   if (msgCursor) params.set('msg_cursor', msgCursor);
 
   const response = await fetch(`${API_BASE}/api/chats/${chatId}?${params}`, { headers });
-  if (!response.ok) throw new Error(`Fetch messages failed: ${response.status}`);
+  if (!response.ok) await throwForStatus(response, 'Fetch messages failed');
   return response.json();
 }
 
@@ -78,7 +75,7 @@ export async function sendChatMessage(chatId, query) {
     headers,
     body: JSON.stringify({ query }),
   });
-  if (!response.ok) throw new Error(`Send message failed: ${response.status}`);
+  if (!response.ok) await throwForStatus(response, 'Send message failed');
   return response.json();
 }
 
@@ -90,7 +87,7 @@ export async function renameChat(chatId, title) {
     headers,
     body: JSON.stringify({ title }),
   });
-  if (!response.ok) throw new Error(`Rename failed: ${response.status}`);
+  if (!response.ok) await throwForStatus(response, 'Rename failed');
   return response.json();
 }
 
@@ -101,27 +98,8 @@ export async function deleteChat(chatId) {
     method: 'DELETE',
     headers,
   });
-  if (!response.ok) throw new Error(`Delete failed: ${response.status}`);
+  if (!response.ok) await throwForStatus(response, 'Delete failed');
   return response.json();
-}
-
-// ── RAG queries (legacy — kept for backward compat) ───────────────────────
-
-export async function sendQuery(query, sessionId) {
-  const headers = await authHeaders({ 'Content-Type': 'application/json' });
-
-  const response = await fetch(`${API_BASE}/rag/query`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ query, session_id: sessionId }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Query failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  return data.result?.content || 'No response received.';
 }
 
 // ── Document upload ────────────────────────────────────────────────────────
@@ -137,12 +115,17 @@ export async function uploadDocument(file, description) {
     body: formData,
   });
 
-  if (!response.ok) {
-    throw new Error(`Upload failed: ${response.status}`);
-  }
+  if (!response.ok) await throwForStatus(response, 'Upload failed');
 
-  const data = await response.json();
-  return data.status;
+  return response.json();
+}
+
+/** Fetch the current user's uploaded documents. */
+export async function fetchDocuments() {
+  const headers = await authHeaders();
+  const response = await fetch(`${API_BASE}/rag/documents`, { headers });
+  if (!response.ok) await throwForStatus(response, 'Fetch documents failed');
+  return response.json();
 }
 
 // ── Model management ───────────────────────────────────────────────────────
@@ -151,9 +134,7 @@ export async function fetchModels() {
   const headers = await authHeaders();
 
   const response = await fetch(`${API_BASE}/models`, { headers });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch models: ${response.status}`);
-  }
+  if (!response.ok) await throwForStatus(response, 'Failed to fetch models');
   return response.json();
 }
 
@@ -166,8 +147,6 @@ export async function switchModel(modelId) {
     body: JSON.stringify({ model_id: modelId }),
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to switch model: ${response.status}`);
-  }
+  if (!response.ok) await throwForStatus(response, 'Failed to switch model');
   return response.json();
 }

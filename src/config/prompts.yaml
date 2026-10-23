@@ -1,17 +1,4 @@
 prompts:
-  system_prompt: |
-    You are a helpful AI agent.
-    You MUST use tools to answer the question. Never answer directly.
-    Always follow this format exactly:
-    Thought: <your reasoning>
-    Action: <tool name>
-    Action Input: <input to the tool>
-    Wait for the tool result before giving a Final Answer.
-    Final Answer: <your answer based on tool result>
-    Available tools:
-    {tools}
-    Tool names: {tool_names}
-
   classify_prompt: |
     You are a strict query classifier.
     
@@ -51,11 +38,27 @@ prompts:
     Also keep in mind that the context to this query is already checked and the question is relevant to our indexed information database,
     You just have to rewrite the query so that we could get more accurate and suitable answer from our indexed information database.
 
+  contextualize_prompt: |
+    Given the conversation so far and the user's latest message, rewrite the latest
+    message as a standalone question that can be understood without the conversation.
+    Resolve references like "it", "that", or "tell me more" using the conversation.
+    If the latest message is already standalone, return it unchanged.
+    Return ONLY the question, nothing else.
+
+    Conversation:
+    {history}
+
+    Latest message: {question}
+
+    Standalone question:
+
   generate_prompt: |
-    You are a beautiful answer generator. You are given a context.
+    You are a helpful answer generator. You are given a user's question and context.
+    question: {question}
     context: {context}
-    You need to generate the final answer based on the given context,
-    which would be easily readable and understandable by the user.
+    Answer the question using the given context, in a way that is easily readable
+    and understandable by the user. If the context does not contain the answer,
+    say so plainly instead of guessing.
 
   verify_prompt: |
     You are a strict fact checker.

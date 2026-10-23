@@ -22,25 +22,10 @@ const AuthContext = createContext(null);
 
 const googleProvider = new GoogleAuthProvider();
 
-/**
- * ⚠️  DEV-ONLY FALLBACK — DO NOT USE IN PRODUCTION
- *
- * Creates an unsigned JWT placeholder when Firebase auth is unavailable.
- * The backend must have ALLOW_JWT_FALLBACK=true for this to be accepted.
- * In production, the backend rejects unsigned tokens by default.
- */
-function createFallbackJwtToken(uid, email) {
-  try {
-    const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/=/g, '');
-    const payload = btoa(JSON.stringify({
-      uid: uid || 'usr_anon',
-      user_id: uid || 'usr_anon',
-      email: email || 'user@docfetch.ai',
-      isFallback: true,
-    })).replace(/=/g, '');
-    return `${header}.${payload}.signature`;
-  } catch {
-    return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJ1c3JfYW5vbiIsImVtYWlsIjoidXNlckBkb2NmZXRjaC5haSJ9.sig';
+/** Firebase isn't configured (missing VITE_FIREBASE_* env vars). */
+function requireAuth() {
+  if (!auth) {
+    throw new Error('Sign-in is unavailable: Firebase is not configured.');
   }
 }
 
@@ -75,6 +60,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login() {
+    requireAuth();
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
@@ -92,68 +78,22 @@ export function AuthProvider({ children }) {
   }
 
   async function loginWithEmail(email, password) {
-    try {
-      return await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
-      if (
-        error.code === 'auth/user-not-found' ||
-        error.code === 'auth/invalid-credential'
-      ) {
-        // Auto-create account if user does not exist yet
-        try {
-          return await createUserWithEmailAndPassword(auth, email, password);
-        } catch (signUpErr) {
-          const uid = 'usr_' + Math.random().toString(36).substring(2, 9);
-          const fallbackUser = {
-            uid,
-            email,
-            displayName: email.split('@')[0],
-            getIdToken: async () => createFallbackJwtToken(uid, email),
-          };
-          setUser(fallbackUser);
-          return fallbackUser;
-        }
-      } else if (error.code === 'auth/operation-not-allowed') {
-        const uid = 'usr_' + Math.random().toString(36).substring(2, 9);
-        const fallbackUser = {
-          uid,
-          email,
-          displayName: email.split('@')[0],
-          getIdToken: async () => createFallbackJwtToken(uid, email),
-        };
-        setUser(fallbackUser);
-        return fallbackUser;
-      }
-      throw error;
-    }
+    requireAuth();
+    return signInWithEmailAndPassword(auth, email, password);
   }
 
   async function registerWithEmail(email, password, displayName) {
-    try {
-      const res = await createUserWithEmailAndPassword(auth, email, password);
-      if (displayName && res?.user) {
-        await updateProfile(res.user, { displayName });
-      }
-      return res;
-    } catch (error) {
-      if (error.code === 'auth/operation-not-allowed') {
-        const uid = 'usr_' + Math.random().toString(36).substring(2, 9);
-        const fallbackUser = {
-          uid,
-          email,
-          displayName: displayName || email.split('@')[0],
-          getIdToken: async () => createFallbackJwtToken(uid, email),
-        };
-        setUser(fallbackUser);
-        return fallbackUser;
-      }
-      throw error;
+    requireAuth();
+    const res = await createUserWithEmailAndPassword(auth, email, password);
+    if (displayName && res?.user) {
+      await updateProfile(res.user, { displayName });
     }
+    return res;
   }
 
   async function logout() {
     setUser(null);
-    await signOut(auth).catch(() => {});
+    if (auth) await signOut(auth).catch(() => {});
   }
 
   /**
@@ -161,10 +101,7 @@ export function AuthProvider({ children }) {
    * Returns null if not authenticated.
    */
   async function getIdToken() {
-    if (user?.getIdToken) return user.getIdToken();
-    if (auth.currentUser) return auth.currentUser.getIdToken();
-    if (user) return createFallbackJwtToken(user.uid, user.email);
-    return null;
+    return auth?.currentUser ? auth.currentUser.getIdToken() : null;
   }
 
   return (
