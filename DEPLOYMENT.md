@@ -52,14 +52,14 @@ Because Python RAG applications use embedding libraries (`sentence-transformers`
    - **Start Command**: `uvicorn src.main:app --host 0.0.0.0 --port $PORT`
 5. **Environment Variables**:
    Add the variables from your `.env` file:
-   - `GROQ_API_KEY`: `your_groq_api_key`
-   - `GOOGLE_API_KEY`: `your_gemini_api_key`
+   - `NVIDIA_API_KEY`: `your_nvidia_api_key` (build.nvidia.com — main chat model and embeddings)
+   - `GROQ_API_KEY`: `your_groq_api_key` (backup chat model)
    - `TAVILY_API_KEY`: `your_tavily_key`
    - `QDRANT_URL`: `your_qdrant_url`
    - `QDRANT_API_KEY`: `your_qdrant_key`
    - `MONGODB_URL`: `your_mongodb_atlas_url`
    - `MONGODB_DB_NAME`: `adaptive_rag`
-   - `ALLOW_JWT_FALLBACK`: `true`
+   - `FIREBASE_PROJECT_ID`: `your_firebase_project_id` (login tokens are verified against this project — no service account needed)
    - `CORS_ORIGINS`: `https://your-frontend.vercel.app`
 6. Click **"Create Web Service"**.
 7. Copy your Render URL (e.g., `https://docfetch-backend.onrender.com`) and paste it as `VITE_API_BASE_URL` in your Vercel project settings.
