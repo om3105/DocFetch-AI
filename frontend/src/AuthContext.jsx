@@ -17,6 +17,7 @@ import {
   signOut,
 } from 'firebase/auth';
 import { auth } from './firebase';
+import { AUTH_EXPIRED_EVENT } from './api';
 
 const AuthContext = createContext(null);
 
@@ -57,6 +58,13 @@ export function AuthProvider({ children }) {
       clearTimeout(timeout);
       unsubscribe();
     };
+  }, []);
+
+  // Sign out when the backend rejects the login (e.g. an expired session)
+  useEffect(() => {
+    const handleExpired = () => logout();
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
   }, []);
 
   async function login() {

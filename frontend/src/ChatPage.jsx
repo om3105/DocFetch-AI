@@ -4,14 +4,20 @@ import DocumentUpload from './DocumentUpload';
 import { useAuth } from './AuthContext';
 import {
   createChat, fetchChats, fetchChatMessages, sendChatMessage,
-  renameChat, deleteChat, fetchModels, switchModel, fetchDocuments,
+  renameChat, deleteChat, fetchModels, switchModel, fetchDocuments, describeError,
 } from './api';
 import './ChatPage.css';
 
-const MODEL_LABELS = {
-  nvidia: 'MiniMax M3.1 Flash · NVIDIA',
-  groq: 'Qwen 3.8 27B · Groq',
+// Shown until the backend's /models list loads
+const DEFAULT_MODELS = {
+  nvidia: { name: 'MiniMax M3.1 Flash · NVIDIA', provider: 'NVIDIA' },
+  groq: { name: 'Qwen 3.8 27B · Groq', provider: 'Groq' },
 };
+
+/** Model name without the " · Provider" suffix, for the compact badge. */
+function shortModelName(models, id) {
+  return (models[id]?.name || id || '').split(' · ')[0];
+}
 
 export default function ChatPage() {
   const { user, logout } = useAuth();
@@ -26,7 +32,8 @@ export default function ChatPage() {
 
   // ── UI state ──────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [models, setModels] = useState(DEFAULT_MODELS);
   const [activeModel, setActiveModel] = useState('nvidia');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelSwitching, setModelSwitching] = useState(false);
@@ -83,10 +90,17 @@ export default function ChatPage() {
   // ── Fetch models and documents on mount ─────────────────────────────
   useEffect(() => {
     fetchModels()
-      .then((data) => setActiveModel(data.active || 'nvidia'))
+      .then((data) => {
+        if (data.models && Object.keys(data.models).length) setModels(data.models);
+        setActiveModel(data.active || 'nvidia');
+      })
       .catch(() => {});
     fetchDocuments()
-      .then((data) => setUploadedFiles((data.documents || []).map((d) => d.filename)))
+      .then((data) => {
+        const docs = data.documents || [];
+        setDocuments(docs);
+        if (docs.length) setKnowledgeExpanded(true);
+      })
       .catch((err) => console.error('Failed to load documents:', err));
   }, []);
 
@@ -214,7 +228,7 @@ export default function ChatPage() {
       console.error('sendChatMessage error:', err);
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: `⚠️ ${err.message || 'Failed to get a response. Please check server connectivity.'}` },
+        { role: 'assistant', content: `⚠️ ${describeError(err)}` },
       ]);
     } finally {
       setLoading(false);
@@ -270,8 +284,9 @@ export default function ChatPage() {
     }
   }
 
-  function handleUploadSuccess(fileName) {
-    setUploadedFiles((prev) => [...prev, fileName]);
+  function handleUploadSuccess(document) {
+    setDocuments((prev) => [document, ...prev]);
+    setKnowledgeExpanded(true);
     setUploadModalOpen(false);
   }
 
@@ -393,22 +408,35 @@ export default function ChatPage() {
               {knowledgeExpanded ? 'expand_more' : 'chevron_right'}
             </span>
             <span>Knowledge Base</span>
-            {uploadedFiles.length > 0 && (
-              <span className="knowledge-count">{uploadedFiles.length}</span>
+            {documents.length > 0 && (
+              <span className="knowledge-count">{documents.length}</span>
             )}
           </button>
           {knowledgeExpanded && (
             <div className="knowledge-list">
-              {uploadedFiles.length === 0 ? (
+              {documents.length === 0 ? (
                 <div className="sync-hint">No documents uploaded yet</div>
               ) : (
-                uploadedFiles.map((name, i) => (
-                  <div key={i} className="chat-history-item">
+                documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="chat-history-item knowledge-doc"
+                    title={doc.description ? `${doc.filename} — ${doc.description}` : doc.filename}
+                  >
                     <span className="material-symbols-outlined">description</span>
-                    <span className="chat-title">{name}</span>
+                    <div className="knowledge-doc-text">
+                      <span className="chat-title">{doc.filename}</span>
+                      {doc.description && (
+                        <span className="knowledge-doc-desc">{doc.description}</span>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
+              <div className="knowledge-private-hint">
+                <span className="material-symbols-outlined">lock</span>
+                Only you can see and search your documents
+              </div>
             </div>
           )}
         </div>
@@ -497,21 +525,25 @@ export default function ChatPage() {
                     className="model-badge-btn"
                     onClick={() => setModelMenuOpen(!modelMenuOpen)}
                   >
-                    <span className="badge-text">{MODEL_LABELS[activeModel].split(' · ')[0]}</span>
+                    <span className="badge-text">{shortModelName(models, activeModel)}</span>
                   </button>
 
                   {modelMenuOpen && (
                     <div className="model-select-popover">
-                      {Object.keys(MODEL_LABELS).map((id) => (
+                      {Object.entries(models).map(([id, info]) => (
                         <button
                           key={id}
                           type="button"
                           className={`model-option ${id === activeModel ? 'active' : ''}`}
                           onClick={() => handleSwitchModel(id)}
                         >
-                          {MODEL_LABELS[id]}
+                          <span className="model-option-name">{shortModelName(models, id)}</span>
+                          <span className="model-option-provider">{info.provider}</span>
                         </button>
                       ))}
+                      <div className="model-popover-note">
+                        If your model is busy, DocFetch switches to another one automatically.
+                      </div>
                     </div>
                   )}
                 </div>

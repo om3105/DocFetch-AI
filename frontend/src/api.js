@@ -13,8 +13,25 @@ async function getAuthToken() {
   return auth.currentUser.getIdToken();
 }
 
+/**
+ * Readable message for a failed request. Browsers report an unreachable
+ * server as a bare "Failed to fetch" (Chrome) or "Load failed" (Safari).
+ */
+export function describeError(err) {
+  if (err instanceof TypeError && /fetch|load failed|network/i.test(err.message)) {
+    return "Can't reach the DocFetch server. Check your connection, or try again in a moment.";
+  }
+  return err?.message || 'Something went wrong. Please try again.';
+}
+
+/** Fired when the backend rejects the login; AuthContext signs the user out. */
+export const AUTH_EXPIRED_EVENT = 'docfetch:auth-expired';
+
 /** Throw an Error carrying the backend's `detail` message when available. */
 async function throwForStatus(response, fallback) {
+  if (response.status === 401) {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
   let detail;
   try {
     detail = (await response.json()).detail;

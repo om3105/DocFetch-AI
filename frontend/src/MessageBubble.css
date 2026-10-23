@@ -123,6 +123,12 @@
 }
 
 /* Typing indicator */
+.typing-slow-note {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0.4rem 0;
+}
+
 .typing-indicator {
   display: flex;
   gap: 5px;
