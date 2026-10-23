@@ -7,6 +7,7 @@ langchain_groq
 langchain_openai~=0.3.28
 langchain-text-splitters~=0.3.9
 langchain-google-genai
+langchain-nvidia-ai-endpoints~=0.3.19
 
 # ── Vector stores & embeddings ──────────────────────────────────────────
 faiss-cpu
@@ -21,6 +22,10 @@ tavily-python
 bs4~=0.0.2
 beautifulsoup4~=4.13.4
 requests~=2.32.4
+
+# ── Document loaders ────────────────────────────────────────────────────
+pypdf
+docx2txt
 
 # ── Data & config ───────────────────────────────────────────────────────
 pydantic~=2.11.7
@@ -38,5 +43,6 @@ motor
 pymongo
 certifi
 
-# ── Firebase auth ───────────────────────────────────────────────────────
-firebase-admin
+# ── Firebase auth (token verification via Google public certs) ─────────
+google-auth
+CacheControl

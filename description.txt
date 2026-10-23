@@ -1,1 +1,0 @@
-Tool Instruction: This tool is exclusively for retrieving information and answering questions based solely on the uploaded document. Do not use it for general knowledge, external queries, or any topics not explicitly covered in the provided content.

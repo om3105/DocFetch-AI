@@ -69,7 +69,7 @@ The system intelligently adapts its retrieval strategy based on query type, util
 │                       FastAPI Backend                           │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  REST API Endpoints                                      │  │
-│  │  • POST /rag/query                                       │  │
+│  │  • POST /api/chats/{id}/messages                         │  │
 │  │  • POST /rag/documents/upload                            │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
@@ -171,37 +171,52 @@ AdaptiveRag/
 http://localhost:8000
 ```
 
-### 1. Query Endpoint
-**Process a RAG query and get intelligent response**
+### Authentication
+Every endpoint except `GET /` requires a Firebase ID token:
 
 ```http
-POST /rag/query
+Authorization: Bearer <firebase_id_token>
+```
+
+Each user only sees their own conversations and documents.
+
+### 1. Chat Endpoints
+**Create a conversation and send messages to the RAG pipeline**
+
+```http
+POST /api/chats                      # create a conversation → { "id": "...", "title": "New Chat", ... }
+GET  /api/chats                      # list conversations
+GET  /api/chats/{id}                 # conversation + messages
+POST /api/chats/{id}/messages        # send a message, get the AI reply
+PATCH /api/chats/{id}                # rename  { "title": "..." }
+DELETE /api/chats/{id}               # delete conversation and its messages
+```
+
+**Send a message:**
+```http
+POST /api/chats/{id}/messages
 Content-Type: application/json
 
 {
-  "query": "What is the main topic of the document?",
-  "session_id": "user_session_123"
+  "query": "What is the main topic of the document?"
 }
 ```
 
 **Response:**
 ```json
 {
-  "result": {
-    "type": "ai",
-    "content": "Based on the document, the main topic is..."
-  }
+  "user_message": { "role": "user", "content": "What is the main topic of the document?", ... },
+  "ai_message": { "role": "assistant", "content": "Based on the document, the main topic is...", ... },
+  "generated_title": "Main Topic of the Document"
 }
 ```
 
-**Parameters:**
-- `query` (string, required): User's question or query
-- `session_id` (string, required): Unique session identifier for conversation tracking
-
 **Status Codes:**
 - `200`: Success
-- `400`: Invalid request format
-- `500`: Server error
+- `401`: Missing or invalid Firebase token
+- `404`: Conversation not found (or not yours)
+- `422`: Invalid request format
+- `502`: The AI pipeline failed — the message was not saved
 
 ---
 
@@ -319,33 +334,38 @@ streamlit run streamlit_app/home.py
 
 **Using cURL:**
 ```bash
+TOKEN="<firebase_id_token>"
+
 # Upload a document
 curl -X POST http://localhost:8000/rag/documents/upload \
+  -H "Authorization: Bearer $TOKEN" \
   -H "X-Description: Sample document about Python" \
   -F "file=@document.pdf"
 
-# Query the RAG system
-curl -X POST http://localhost:8000/rag/query \
+# Create a conversation, then ask a question in it
+CHAT_ID=$(curl -s -X POST http://localhost:8000/api/chats \
+  -H "Authorization: Bearer $TOKEN" | python -c "import sys, json; print(json.load(sys.stdin)['id'])")
+
+curl -X POST http://localhost:8000/api/chats/$CHAT_ID/messages \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "query": "Tell me about Python",
-    "session_id": "user_123"
-  }'
+  -d '{"query": "Tell me about Python"}'
 ```
 
 **Using Python:**
 ```python
 import requests
 
-# Query endpoint
+headers = {"Authorization": "Bearer <firebase_id_token>"}
+base = "http://localhost:8000/api/chats"
+
+chat = requests.post(base, headers=headers).json()
 response = requests.post(
-    "http://localhost:8000/rag/query",
-    json={
-        "query": "What is Python?",
-        "session_id": "user_123"
-    }
+    f"{base}/{chat['id']}/messages",
+    headers=headers,
+    json={"query": "What is Python?"},
 )
-print(response.json())
+print(response.json()["ai_message"]["content"])
 ```
 
 ---
@@ -400,24 +420,21 @@ Query Classification
 **Test 1: Simple Query**
 ```json
 {
-  "query": "Hello, how are you?",
-  "session_id": "test_user_1"
+  "query": "Hello, how are you?"
 }
 ```
 
 **Test 2: Document-Based Query**
 ```json
 {
-  "query": "What topics are covered in the uploaded document?",
-  "session_id": "test_user_1"
+  "query": "What topics are covered in the uploaded document?"
 }
 ```
 
 **Test 3: General Knowledge Query**
 ```json
 {
-  "query": "What is machine learning?",
-  "session_id": "test_user_1"
+  "query": "What is machine learning?"
 }
 ```
 

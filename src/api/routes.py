@@ -1,29 +1,25 @@
 """
-API routes for RAG operations.
+API routes for model selection and document upload.
 """
 
 import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Header
-from langchain_core.messages import HumanMessage, AIMessage
 from pydantic import BaseModel
 
 from src.auth import verify_firebase_token
 from src.core.rate_limiter import limiter
-from src.memory.chat_history_mongo import ChatHistory
-from src.models.query_request import QueryRequest
-from src.rag.document_upload import documents
-from src.rag.graph_builder import builder
-from src.llms.openai import (
-    AVAILABLE_MODELS, set_active_llm, get_active_model_id,
+from src.db.user_data import (
+    add_document_record, get_user_model, list_documents, set_user_model,
 )
+from src.llms.openai import AVAILABLE_MODELS
+from src.rag.document_upload import SUPPORTED_EXTENSIONS, process_document
 
 router = APIRouter()
 
 # ── Upload constraints ──────────────────────────────────────────────────────
 
-ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
@@ -37,10 +33,10 @@ class ModelSwitchRequest(BaseModel):
 @router.get("/models")
 @limiter.limit("30/minute")
 async def list_models(request: Request, user: dict = Depends(verify_firebase_token)):
-    """List available LLM models and the currently active one."""
+    """List available LLM models and the user's selected one."""
     return {
         "models": AVAILABLE_MODELS,
-        "active": get_active_model_id(),
+        "active": await get_user_model(user["uid"]),
     }
 
 
@@ -51,47 +47,21 @@ async def switch_model(
     req: ModelSwitchRequest,
     user: dict = Depends(verify_firebase_token),
 ):
-    """Switch the active LLM model."""
-    info = set_active_llm(req.model_id)
-    return {"active": req.model_id, **info}
+    """Switch the user's selected LLM model (affects only this user)."""
+    if req.model_id not in AVAILABLE_MODELS:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {req.model_id}")
+    await set_user_model(user["uid"], req.model_id)
+    return {"active": req.model_id, **AVAILABLE_MODELS[req.model_id]}
 
 
-# ── RAG queries ─────────────────────────────────────────────────────────────
+# ── Documents ───────────────────────────────────────────────────────────────
 
-@router.post("/rag/query")
-@limiter.limit("10/minute")
-async def rag_query(request: Request, req: QueryRequest, user: dict = Depends(verify_firebase_token)):
-    """
-    Process a RAG query and return the result.
-    Requires Firebase authentication.
+@router.get("/rag/documents")
+@limiter.limit("30/minute")
+async def get_documents(request: Request, user: dict = Depends(verify_firebase_token)):
+    """List the user's uploaded documents."""
+    return {"documents": await list_documents(user["uid"])}
 
-    Args:
-        request: The incoming HTTP request (needed for rate-limiter key extraction).
-        req: The query request containing query text and session_id.
-        user: Decoded Firebase token (injected via dependency).
-
-    Returns:
-        The generated response from the RAG pipeline.
-    """
-    # Use Firebase uid as session scope for chat history
-    session_id = user["uid"]
-    chat_history = ChatHistory.get_session_history(session_id)
-    await chat_history.add_message(HumanMessage(content=req.query))
-
-    # Fetch full history
-    messages = await chat_history.get_messages()
-    result = await asyncio.to_thread(builder.invoke, {
-        "messages": messages
-    })
-    output_text = result["messages"][-1].content
-
-    # Save assistant message
-    await chat_history.add_message(AIMessage(content=output_text))
-
-    return {"result": result["messages"][-1]}
-
-
-# ── Document upload ─────────────────────────────────────────────────────────
 
 @router.post("/rag/documents/upload")
 @limiter.limit("5/minute")
@@ -103,7 +73,7 @@ async def upload_file(
 ):
     """
     Upload a document for RAG processing.
-    Requires Firebase authentication.
+    The document is only searchable by the uploading user.
 
     Args:
         request: The incoming HTTP request (needed for rate-limiter key extraction).
@@ -112,25 +82,34 @@ async def upload_file(
         user: Decoded Firebase token (injected via dependency).
 
     Returns:
-        Upload status.
+        Upload status and the stored document record.
     """
     # Validate file extension
     ext = Path(file.filename).suffix.lower() if file.filename else ""
-    if ext not in ALLOWED_EXTENSIONS:
+    if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"File type '{ext}' not allowed. Accepted: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
+            detail=f"File type '{ext}' not allowed. Accepted: {', '.join(sorted(SUPPORTED_EXTENSIONS))}",
         )
+
+    # Validate description length
+    description = description.strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="Description is required")
+    if len(description) > 500:
+        raise HTTPException(status_code=400, detail="Description exceeds 500 character limit")
 
     # Validate file size
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="File exceeds 10 MB limit")
-    await file.seek(0)  # Reset stream position for downstream processing
 
-    # Validate description length
-    if len(description) > 500:
-        raise HTTPException(status_code=400, detail="Description exceeds 500 character limit")
+    uid = user["uid"]
+    model_id = await get_user_model(uid)
 
-    status_upload = documents(description, file.filename, content)
-    return {"status": status_upload}
+    # Parsing, embedding and the LLM call block — keep them off the event loop
+    enhanced = await asyncio.to_thread(
+        process_document, uid, description, file.filename, content, model_id,
+    )
+    record = await add_document_record(uid, file.filename, description, enhanced)
+    return {"status": True, "document": record}

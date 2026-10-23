@@ -4,13 +4,13 @@ import DocumentUpload from './DocumentUpload';
 import { useAuth } from './AuthContext';
 import {
   createChat, fetchChats, fetchChatMessages, sendChatMessage,
-  renameChat, deleteChat, fetchModels, switchModel, sendQuery,
+  renameChat, deleteChat, fetchModels, switchModel, fetchDocuments,
 } from './api';
 import './ChatPage.css';
 
 const MODEL_LABELS = {
-  groq: 'Qwen 2.5 27B · Groq',
-  gemini: 'Gemini 2.5 Flash · Google',
+  nvidia: 'MiniMax M3.1 Flash · NVIDIA',
+  groq: 'Qwen 3.8 27B · Groq',
 };
 
 export default function ChatPage() {
@@ -27,7 +27,7 @@ export default function ChatPage() {
   // ── UI state ──────────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [activeModel, setActiveModel] = useState('gemini');
+  const [activeModel, setActiveModel] = useState('nvidia');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelSwitching, setModelSwitching] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -80,11 +80,14 @@ export default function ChatPage() {
     loadConversations();
   }, [loadConversations]);
 
-  // ── Fetch models on mount ─────────────────────────────────────────────
+  // ── Fetch models and documents on mount ─────────────────────────────
   useEffect(() => {
     fetchModels()
-      .then((data) => setActiveModel(data.active || 'groq'))
+      .then((data) => setActiveModel(data.active || 'nvidia'))
       .catch(() => {});
+    fetchDocuments()
+      .then((data) => setUploadedFiles((data.documents || []).map((d) => d.filename)))
+      .catch((err) => console.error('Failed to load documents:', err));
   }, []);
 
   // ── Close dropdowns on outside click ──────────────────────────────────
@@ -173,23 +176,16 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { role: 'user', content: query }]);
     setLoading(true);
 
-    // 2. Ensure active conversation ID exists
+    // 2. Send message & process AI response (creating the conversation if needed)
     let chatId = activeChatId;
-    if (!chatId) {
-      try {
+    try {
+      if (!chatId) {
         const chat = await createChat();
         chatId = chat.id;
         setConversations((prev) => [chat, ...prev]);
         setActiveChatId(chatId);
-      } catch (err) {
-        console.warn('Backend createChat failed, using fallback session:', err);
-        chatId = 'temp_' + Date.now();
-        setActiveChatId(chatId);
       }
-    }
 
-    // 3. Send message & process AI response
-    try {
       const result = await sendChatMessage(chatId, query);
       setMessages((prev) => [
         ...prev,
@@ -215,19 +211,11 @@ export default function ChatPage() {
         ];
       });
     } catch (err) {
-      console.error('sendChatMessage error, attempting legacy sendQuery fallback:', err);
-      try {
-        const legacyResponse = await sendQuery(query, user?.uid || 'anonymous');
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: legacyResponse },
-        ]);
-      } catch (legacyErr) {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: '⚠️ Failed to get a response. Please check server connectivity.' },
-        ]);
-      }
+      console.error('sendChatMessage error:', err);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: `⚠️ ${err.message || 'Failed to get a response. Please check server connectivity.'}` },
+      ]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
