@@ -2,6 +2,32 @@ import { useState } from 'react';
 import { useAuth } from './AuthContext';
 import './LoginPage.css';
 
+/** Turn Firebase auth error codes into messages a user can act on. */
+function authErrorMessage(err, mode) {
+  switch (err?.code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return mode === 'login'
+        ? 'Incorrect email or password. New to DocFetch? Switch to Register to create an account.'
+        : 'Those details were rejected. Please check them and try again.';
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists. Switch to Log In instead.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/weak-password':
+      return 'Password must be at least 6 characters.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a few minutes and try again.';
+    case 'auth/network-request-failed':
+      return 'Network error. Check your connection and try again.';
+    case 'auth/operation-not-allowed':
+      return 'This sign-in method is not enabled for DocFetch.';
+    default:
+      return err?.message || 'Authentication failed. Please try again.';
+  }
+}
+
 export default function LoginPage() {
   const { login, loginWithEmail, registerWithEmail } = useAuth();
   const [mode, setMode] = useState('login'); // 'login' | 'register'
@@ -18,7 +44,7 @@ export default function LoginPage() {
       await login();
     } catch (err) {
       console.error('Login failed:', err.message);
-      setError('Google sign-in failed. Please try again.');
+      setError(err?.code ? authErrorMessage(err, 'login') : err?.message || 'Google sign-in failed. Please try again.');
     }
   }
 
@@ -43,7 +69,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       console.error('Auth action failed:', err.message);
-      setError(err.message || 'Authentication failed. Please verify credentials.');
+      setError(authErrorMessage(err, mode));
     } finally {
       setLoading(false);
     }

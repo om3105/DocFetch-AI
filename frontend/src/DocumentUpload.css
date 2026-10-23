@@ -176,6 +176,20 @@
 }
 
 /* Status */
+.upload-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.upload-hint .material-symbols-outlined {
+  font-size: 14px !important;
+}
+
 .upload-status {
   padding: 0.45rem 0.6rem;
   border-radius: 6px;

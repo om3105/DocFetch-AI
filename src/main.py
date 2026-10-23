@@ -4,16 +4,15 @@ Main FastAPI application entry point.
 
 import logging
 import os
-import traceback
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from src.api.chat_routes import chat_router
 from src.api.routes import router
+from src.core.error_handler import ErrorHandlerMiddleware
 from src.core.rate_limiter import limiter
 from src.core.request_guard import RequestGuardMiddleware
 from src.core.security_headers import SecurityHeadersMiddleware
@@ -36,7 +35,10 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# ── Middleware stack (order matters: outermost runs first) ───────────────────
+# ── Middleware stack (first added runs innermost; CORS, added last, is outermost) ──
+
+# 0. Error handler — innermost, so its 500 responses still get CORS headers
+app.add_middleware(ErrorHandlerMiddleware)
 
 # 1. Request guard — blocks oversized/suspicious requests early
 app.add_middleware(RequestGuardMiddleware)
@@ -66,13 +68,6 @@ app.add_middleware(
 
 app.include_router(router)
 app.include_router(chat_router, prefix="/api")
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Log full traceback for unhandled errors — never leak details to client."""
-    logger.error("Unhandled error on %s %s:\n%s", request.method, request.url, traceback.format_exc())
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.get("/")

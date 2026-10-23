@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { uploadDocument } from './api';
+import { describeError, uploadDocument } from './api';
 import './DocumentUpload.css';
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.txt', '.md', '.docx'];
@@ -58,14 +58,14 @@ export default function DocumentUpload({ onUploadSuccess }) {
     setStatus(null);
 
     try {
-      await uploadDocument(file, description.trim());
+      const result = await uploadDocument(file, description.trim());
       setStatus({ type: 'success', message: `Uploaded: ${file.name}` });
-      onUploadSuccess?.(file.name);
+      onUploadSuccess?.(result.document || { id: file.name, filename: file.name, description: description.trim() });
       setFile(null);
       setDescription('');
       if (inputRef.current) inputRef.current.value = '';
     } catch (err) {
-      setStatus({ type: 'error', message: `Upload failed for ${file.name}: ${err.message}` });
+      setStatus({ type: 'error', message: `Upload failed for ${file.name}: ${describeError(err)}` });
     } finally {
       setUploading(false);
     }
@@ -137,6 +137,11 @@ export default function DocumentUpload({ onUploadSuccess }) {
           </button>
         </div>
       )}
+
+      <p className="upload-hint">
+        <span className="material-symbols-outlined">lock</span>
+        Documents are private to your account. Large files can take up to a minute to process.
+      </p>
 
       {status && (
         <div className={`upload-status ${status.type}`}>
