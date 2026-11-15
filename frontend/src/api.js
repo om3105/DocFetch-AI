@@ -24,6 +24,21 @@ export function describeError(err) {
   return err?.message || 'Something went wrong. Please try again.';
 }
 
+/**
+ * Ping the backend so a sleeping free-tier server starts booting while the
+ * visitor is still on the login page. Resolves true once it answers.
+ */
+export async function wakeServer({ attempts = 4, timeoutMs = 60000 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const response = await fetch(`${API_BASE}/`, { signal: AbortSignal.timeout(timeoutMs) });
+      if (response.ok) return true;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  return false;
+}
+
 /** Fired when the backend rejects the login; AuthContext signs the user out. */
 export const AUTH_EXPIRED_EVENT = 'docfetch:auth-expired';
 

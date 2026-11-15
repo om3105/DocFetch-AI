@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from './AuthContext';
 import LoginPage from './LoginPage';
 import ChatPage from './ChatPage';
+import ServerWakeBanner from './ServerWakeBanner';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -27,6 +28,7 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
+      <ServerWakeBanner />
       <AppContent />
     </AuthProvider>
   );
