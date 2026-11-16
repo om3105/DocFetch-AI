@@ -50,8 +50,9 @@ _CHAINS = {
 _SUPPORTS_STRUCTURED = {"nvidia": False, "groq": True}
 
 # Per-call limit: free-tier calls occasionally queue for 30-50s; past this,
-# give up on that model and let the pool try the next one
-_CALL_TIMEOUT_SECONDS = 25
+# give up on that model and let the pool try the next one. Kept short because
+# a graph run makes several LLM calls and each slow model adds this much
+_CALL_TIMEOUT_SECONDS = 12
 
 _NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
@@ -97,6 +98,9 @@ def _get_model(name: str):
 # ── Rate-limit cooldown ─────────────────────────────────────────────────────
 
 _DEFAULT_COOLDOWN_SECONDS = 20.0
+# How long to skip a model that timed out or returned a server error, so the
+# remaining calls in the same graph run go straight to a working model
+_OUTAGE_COOLDOWN_SECONDS = 60.0
 # Longest a request waits for a model to free up when the whole pool is busy
 _MAX_POOL_WAIT_SECONDS = 20.0
 _cooldown_until: dict[str, float] = {}
@@ -107,18 +111,38 @@ def _is_rate_limit(ex: Exception) -> bool:
     return "429" in err or "Too Many Requests" in err or "RESOURCE_EXHAUSTED" in err
 
 
+def _is_outage(ex: Exception) -> bool:
+    """Timeouts, connection failures and 5xx responses: the provider is struggling."""
+    err = str(ex)
+    return (
+        "timed out" in err.lower()
+        or "Timeout" in type(ex).__name__
+        or "Connection error" in err
+        or re.search(r"Error code: 5\d\d", err) is not None
+        or "Service Unavailable" in err
+    )
+
+
 def _cooling_down(name: str) -> bool:
     return time.monotonic() < _cooldown_until.get(name, 0.0)
 
 
 def _note_failure(name: str, ex: Exception) -> None:
-    """Skip a rate-limited model for the delay its error asks for (default 20s)."""
-    if not _is_rate_limit(ex):
+    """
+    Skip a rate-limited model for the delay its error asks for (default 20s),
+    and a timed-out or erroring model for _OUTAGE_COOLDOWN_SECONDS.
+    """
+    if _is_rate_limit(ex):
+        match = re.search(r"(?:retry|try again) in ([\d.]+)s", str(ex))
+        seconds = float(match.group(1)) if match else _DEFAULT_COOLDOWN_SECONDS
+        reason = "rate-limited"
+    elif _is_outage(ex):
+        seconds = _OUTAGE_COOLDOWN_SECONDS
+        reason = "unavailable"
+    else:
         return
-    match = re.search(r"(?:retry|try again) in ([\d.]+)s", str(ex))
-    seconds = float(match.group(1)) if match else _DEFAULT_COOLDOWN_SECONDS
     _cooldown_until[name] = time.monotonic() + seconds
-    logger.warning("%s rate-limited; skipping it for %.0fs", name, seconds)
+    logger.warning("%s %s; skipping it for %.0fs", name, reason, seconds)
 
 
 def _run_with_pool(chain: list[str], call):
@@ -202,7 +226,7 @@ class ResilientStructured(Runnable):
                 # Groq reports schema-validation failures with the raw generation attached
                 if 'failed_generation' in str(ex):
                     return _parse_schema_from_text(self.schema, str(ex))
-                if _is_rate_limit(ex):
+                if _is_rate_limit(ex) or _is_outage(ex):
                     raise
                 logger.warning("Structured output from %s failed (%s), parsing plain text", name, ex)
         res = _strip_think(model.invoke(input, config, **kwargs))
