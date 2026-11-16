@@ -195,6 +195,25 @@ def _first_word_match(text: str, choices: list[str]) -> str | None:
     return min(hits)[1] if hits else None
 
 
+def _fields_from_failed_generation(schema, err: str):
+    """
+    Read the schema's field values from a rejected tool call quoted in an error
+    (e.g. `"route": "index"`). Returns None unless every field is found, so the
+    caller doesn't guess from words elsewhere in the error message.
+    """
+    fields = getattr(schema, 'model_fields', {})
+    values = {}
+    for name in fields:
+        match = re.search(rf'\\*["\']{name}\\*["\']\s*:\s*\\*["\']([\w-]+)', err)
+        if not match:
+            return None
+        values[name] = match.group(1).lower()
+    try:
+        return schema(**values)
+    except Exception:
+        return None
+
+
 def _parse_schema_from_text(schema, text):
     """Extract a structured Pydantic model from a raw text answer."""
     cleaned = re.sub(r'<think>.*?</think>', '', str(text), flags=re.DOTALL).strip().lower()
@@ -225,12 +244,15 @@ class ResilientStructured(Runnable):
             try:
                 return model.with_structured_output(self.schema).invoke(input, config, **kwargs)
             except Exception as ex:
-                # Groq reports schema-validation failures with the raw generation attached
-                if 'failed_generation' in str(ex):
-                    return _parse_schema_from_text(self.schema, str(ex))
                 if _is_rate_limit(ex) or _is_outage(ex):
                     raise
-                logger.warning("Structured output from %s failed (%s), parsing plain text", name, ex)
+                # Groq reports schema-validation failures with the raw generation
+                # attached; use it only if it states every field outright
+                if 'failed_generation' in str(ex):
+                    parsed = _fields_from_failed_generation(self.schema, str(ex))
+                    if parsed is not None:
+                        return parsed
+                logger.warning("Structured output from %s failed (%s), parsing plain text", name, str(ex)[:300])
         res = _strip_think(model.invoke(input, config, **kwargs))
         return _parse_schema_from_text(self.schema, getattr(res, 'content', str(res)))
 
