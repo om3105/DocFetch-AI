@@ -10,8 +10,8 @@ import './ChatPage.css';
 
 // Shown until the backend's /models list loads
 const DEFAULT_MODELS = {
-  nvidia: { name: 'MiniMax M3.1 Flash · NVIDIA', provider: 'NVIDIA' },
   groq: { name: 'Qwen 3.8 27B · Groq', provider: 'Groq' },
+  nvidia: { name: 'MiniMax M3.1 Flash · NVIDIA', provider: 'NVIDIA' },
 };
 
 /** Model name without the " · Provider" suffix, for the compact badge. */
@@ -34,7 +34,7 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [models, setModels] = useState(DEFAULT_MODELS);
-  const [activeModel, setActiveModel] = useState('nvidia');
+  const [activeModel, setActiveModel] = useState('groq');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelSwitching, setModelSwitching] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -92,7 +92,7 @@ export default function ChatPage() {
     fetchModels()
       .then((data) => {
         if (data.models && Object.keys(data.models).length) setModels(data.models);
-        setActiveModel(data.active || 'nvidia');
+        setActiveModel(data.active || 'groq');
       })
       .catch(() => {});
     fetchDocuments()

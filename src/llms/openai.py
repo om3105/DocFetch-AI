@@ -24,11 +24,13 @@ load_dotenv()
 # ── Available LLMs ──────────────────────────────────────────────────────────
 
 AVAILABLE_MODELS = {
-    "nvidia": {"name": "MiniMax M3.1 Flash · NVIDIA", "provider": "NVIDIA"},
     "groq": {"name": "Qwen 3.8 27B · Groq", "provider": "Groq"},
+    "nvidia": {"name": "MiniMax M3.1 Flash · NVIDIA", "provider": "NVIDIA"},
 }
 
-DEFAULT_MODEL: str = "nvidia"
+# Groq answers fastest and has been the most reliable free tier; its per-minute
+# token limit is the main risk, and the pool falls back to NVIDIA when it's hit
+DEFAULT_MODEL: str = "groq"
 
 # Pool members: name -> (provider, provider model id). Ordered fastest first.
 _POOL = {
